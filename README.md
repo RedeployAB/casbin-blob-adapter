@@ -20,8 +20,9 @@ for other options.
 package main
 
 import (
+    "github.com/Azure/azure-sdk-for-go/sdk/azidentity"
     blobadapter "github.com/RedeployAB/casbin-blob-adapter"
-    "github.com/casbin/casbin"
+    "github.com/casbin/casbin/v2"
 )
 
 func main() {
