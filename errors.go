@@ -17,4 +17,8 @@ var (
 	ErrInvalidContainer = errors.New("invalid container")
 	// ErrInvalidBlob is returned when the blob is invalid.
 	ErrInvalidBlob = errors.New("invalid blob")
+	// ErrContainerDoesNotExist is returned when the container does not exist.
+	ErrContainerDoesNotExist = errors.New("container does not exist")
+	// ErrBlobDoesNotExist is returned when the blob does not exist.
+	ErrBlobDoesNotExist = errors.New("blob does not exist")
 )

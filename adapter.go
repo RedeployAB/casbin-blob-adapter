@@ -5,13 +5,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
-	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 	"github.com/casbin/casbin/v2/model"
 	"github.com/casbin/casbin/v2/persist"
@@ -31,6 +31,7 @@ type Adapter struct {
 	container string
 	blob      string
 	timeout   time.Duration
+	initiated bool
 }
 
 // NewAdapter returns a new adapter with the given account, container, blob and credentials.
@@ -54,12 +55,12 @@ func NewAdapter(account, container, blob string, cred azcore.TokenCredential, op
 }
 
 // NewAdapterFromConnectionString returns a new adapter with the given connection string, container and blob.
-func NewAdapterFromConnectionString(connectionString, container, blob string) (*Adapter, error) {
+func NewAdapterFromConnectionString(connectionString, container, blob string, options ...Option) (*Adapter, error) {
 	if len(connectionString) == 0 {
 		return nil, ErrInvalidConnectionString
 	}
 
-	a, err := newAdapter(container, blob)
+	a, err := newAdapter(container, blob, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -74,12 +75,12 @@ func NewAdapterFromConnectionString(connectionString, container, blob string) (*
 }
 
 // NewAdapterFromSharedKeyCredential returns a new adapter with the given account, key, container and blob.
-func NewAdapterFromSharedKeyCredential(account, key, container, blob string) (*Adapter, error) {
+func NewAdapterFromSharedKeyCredential(account, key, container, blob string, options ...Option) (*Adapter, error) {
 	if err := checkAccountKeyArguments(account, key); err != nil {
 		return nil, err
 	}
 
-	a, err := newAdapter(container, blob)
+	a, err := newAdapter(container, blob, options...)
 	if err != nil {
 		return nil, err
 	}
@@ -136,17 +137,26 @@ func (a *Adapter) loadPolicyBlob(model model.Model, handler func(string, model.M
 
 	res, err := a.c.DownloadStream(ctx, a.container, a.blob, nil)
 	if err != nil {
+		// When creating the enforcer with the adapter it will attempt to load the policy,
+		// to avoid an error at this point, return nil and set initiated to true.
+		// Next call to LoadPolicy will return the error.
 		if bloberror.HasCode(err, bloberror.ContainerNotFound) {
-			if _, err := a.c.CreateContainer(ctx, a.container, nil); err != nil {
-				return err
+			if !a.initiated {
+				a.initiated = true
+				return nil
 			}
-			res = emptyDownloadStreamResponse()
+			return fmt.Errorf("%w: %s", ErrContainerDoesNotExist, a.container)
 		} else if bloberror.HasCode(err, bloberror.BlobNotFound) {
-			res = emptyDownloadStreamResponse()
+			if !a.initiated {
+				a.initiated = true
+				return nil
+			}
+			return fmt.Errorf("%w: %s", ErrBlobDoesNotExist, a.blob)
 		} else {
 			return err
 		}
 	}
+
 	defer res.Body.Close()
 
 	scanner := bufio.NewScanner(res.Body)
@@ -217,15 +227,6 @@ func writeRule(buf *bytes.Buffer, ptype string, rule []string) {
 	buf.WriteString(ptype + ", ")
 	buf.WriteString(util.ArrayToString(rule))
 	buf.WriteString("\n")
-}
-
-// emptyDownloadStreamResponse returns an empty download stream response.
-func emptyDownloadStreamResponse() azblob.DownloadStreamResponse {
-	return azblob.DownloadStreamResponse{
-		DownloadResponse: blob.DownloadResponse{
-			Body: io.NopCloser(bytes.NewReader([]byte{})),
-		},
-	}
 }
 
 // checkAccountCredentialsArguments checks if the provided account and credentials are not empty.
