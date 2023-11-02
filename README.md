@@ -4,6 +4,11 @@
 
 [Casbin](https://github.com/casbin/casbin) adapter implementation for Azure Blob Storage.
 
+* [Installation](#installation)
+* [Example usage](#example-usage)
+* [Constructor functions](#constructor-functions)
+
+
 ## Installation
 
 ```sh
@@ -67,7 +72,7 @@ func main() {
 }
 ```
 
-### Constructor functions
+## Constructor functions
 
 **`NewAdapter(account string, container string, blob string, cred azcore.TokenCredential) (*Adapter, error)`**
 
