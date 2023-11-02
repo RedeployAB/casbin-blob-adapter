@@ -33,9 +33,6 @@ type Adapter struct {
 	timeout   time.Duration
 }
 
-// Option is a function that sets options on the adapter.
-type Option func(*Adapter)
-
 // NewAdapter returns a new adapter with the given account, container, blob and credentials.
 func NewAdapter(account, container, blob string, cred azcore.TokenCredential, options ...Option) (*Adapter, error) {
 	if err := checkAccountCredentialsArguments(account, cred); err != nil {
