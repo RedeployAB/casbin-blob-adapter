@@ -70,7 +70,7 @@ func main() {
 
 **`NewAdapter(account string, container string, blob string, cred azcore.TokenCredential) (*Adapter, error)`**
 
-Uses `azcore.TokenCredential`. See `[azidentity](https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity)` for
+Uses `azcore.TokenCredential`. See [`azidentity`](https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity) for
 more options on creating credentials.
 
 ```go
