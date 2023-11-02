@@ -45,7 +45,7 @@ func main() {
         // Handle error.
     }
 
-    e, err := casbin.NewEnforcer("rbac_model.conf", a)
+    e, err := casbin.NewEnforcer("rbac_with_domains_model.conf", a)
     if err != nil {
         // Handle error.
     }
@@ -74,7 +74,7 @@ func main() {
 
 ## Constructor functions
 
-**`NewAdapter(account string, container string, blob string, cred azcore.TokenCredential) (*Adapter, error)`**
+**`NewAdapter(account string, container string, blob string, cred azcore.TokenCredential, options ...Option) (*Adapter, error)`**
 
 Uses `azcore.TokenCredential`. See [`azidentity`](https://pkg.go.dev/github.com/Azure/azure-sdk-for-go/sdk/azidentity) for
 more options on creating credentials.
@@ -91,7 +91,7 @@ if err != nil {
 }
 ```
 
-**`NewAdapterFromConnectionString(connectionString string, container string, blob string) (*Adapter, error)`**
+**`NewAdapterFromConnectionString(connectionString string, container string, blob string, options ...Option) (*Adapter, error)`**
 
 Uses a connection string for an Azure Storage account.
 
@@ -102,7 +102,7 @@ if err != nil {
 }
 ```
 
-**`NewAdapterFromSharedKeyCredential(account string, key string, container string, blob string) (*Adapter, error)`**
+**`NewAdapterFromSharedKeyCredential(account string, key string, container string, blob string, options ...Option) (*Adapter, error)`**
 
 Uses storage account name and key for an Azure Storage account.
 
