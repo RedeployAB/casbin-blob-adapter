@@ -20,8 +20,8 @@ for other options.
 package main
 
 import (
+    blobadapter "github.com/RedeployAB/casbin-blob-adapter"
     "github.com/casbin/casbin"
-    "github.com/RedeployAB/casbin-blob-adapter"
 )
 
 func main() {
