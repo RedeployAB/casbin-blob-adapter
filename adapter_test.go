@@ -562,9 +562,6 @@ func TestAdapter_SavePolicy(t *testing.T) {
 
 			_, _ = e.AddPolicy("alice", "domain1", "data1", "read")
 			_, _ = e.AddGroupingPolicy("alice", "admin", "domain1")
-			/* if err != nil {
-				t.Errorf("error in test: %v\n", err)
-			} */
 
 			gotErr := e.SavePolicy()
 			got := test.input.c.policies
@@ -576,18 +573,6 @@ func TestAdapter_SavePolicy(t *testing.T) {
 			if diff := cmp.Diff(nil, gotErr, cmpopts.EquateErrors()); diff != "" {
 				t.Errorf("SavePolicy() unexpected error (-want +got):\n%s\n", diff)
 			}
-
-		})
-	}
-}
-
-func TestWriteRule(t *testing.T) {
-	var tests = []struct {
-		name string
-	}{}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
 
 		})
 	}
