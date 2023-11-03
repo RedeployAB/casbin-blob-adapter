@@ -19,7 +19,8 @@ import (
 	"github.com/casbin/casbin/v2/util"
 )
 
-// client is the interface that wraps around methods CreateContainer, DownloadStream and UploadStream.
+// client is the interface that wraps around methods NewListContainersPager, NewListBlobsFlatPager,
+// CreateContainer, DownloadStream and UploadStream.
 type client interface {
 	NewListContainersPager(o *azblob.ListContainersOptions) *runtime.Pager[azblob.ListContainersResponse]
 	NewListBlobsFlatPager(containerName string, o *azblob.ListBlobsFlatOptions) *runtime.Pager[azblob.ListBlobsFlatResponse]
