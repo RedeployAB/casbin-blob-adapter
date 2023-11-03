@@ -3,6 +3,8 @@ package blobadapter
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"fmt"
 	"io"
 	"testing"
 	"time"
@@ -241,7 +243,7 @@ func TestNewAdapterFromConnectionString(t *testing.T) {
 				blob             string
 				options          []Option
 			}{
-				connectionString: "DefaultEndpointsProtocol=https;AccountName=<accountName>;AccountKey=PGFjY291bnRLZXk+;EndpointSuffix=core.windows.net",
+				connectionString: fmt.Sprintf("DefaultEndpointsProtocol=https;AccountName=<accountName>;AccountKey=%s;EndpointSuffix=core.windows.net", _testKey),
 				container:        "container",
 				blob:             "blob",
 				options: []Option{
@@ -266,7 +268,7 @@ func TestNewAdapterFromConnectionString(t *testing.T) {
 				blob             string
 				options          []Option
 			}{
-				connectionString: "DefaultEndpointsProtocol=https;AccountName=<accountName>;AccountKey=PGFjY291bnRLZXk+;EndpointSuffix=core.windows.net",
+				connectionString: fmt.Sprintf("DefaultEndpointsProtocol=https;AccountName=<accountName>;AccountKey=%s;EndpointSuffix=core.windows.net", _testKey),
 				container:        "container",
 				blob:             "blob",
 				options: []Option{
@@ -343,7 +345,7 @@ func TestNewAdapterFromSharedKeyCredential(t *testing.T) {
 				options   []Option
 			}{
 				account:   "account",
-				key:       "PGFjY291bnRLZXk+",
+				key:       _testKey,
 				container: "container",
 				blob:      "blob",
 				options: []Option{
@@ -369,7 +371,7 @@ func TestNewAdapterFromSharedKeyCredential(t *testing.T) {
 				options   []Option
 			}{
 				account:   "account",
-				key:       "PGFjY291bnRLZXk+",
+				key:       _testKey,
 				container: "container",
 				blob:      "blob",
 				options: []Option{
@@ -396,7 +398,7 @@ func TestNewAdapterFromSharedKeyCredential(t *testing.T) {
 				options   []Option
 			}{
 				account:   "",
-				key:       "PGFjY291bnRLZXk+",
+				key:       _testKey,
 				container: "container",
 				blob:      "blob",
 				options: []Option{
@@ -678,3 +680,5 @@ type mockCredential struct{}
 func (c *mockCredential) GetToken(ctx context.Context, options policy.TokenRequestOptions) (azcore.AccessToken, error) {
 	return azcore.AccessToken{}, nil
 }
+
+var _testKey = base64.StdEncoding.EncodeToString([]byte("<accountKey>"))
