@@ -150,9 +150,6 @@ func (a *Adapter) loadPolicyBlob(model model.Model, handler func(string, model.M
 
 	res, err := a.c.DownloadStream(ctx, a.container, a.blob, nil)
 	if err != nil {
-		// When creating the enforcer with the adapter it will attempt to load the policy,
-		// to avoid an error at this point, return nil and set initiated to true.
-		// Next call to LoadPolicy will return the error.
 		if bloberror.HasCode(err, bloberror.ContainerNotFound) {
 			return fmt.Errorf("%w: %s", ErrContainerDoesNotExist, a.container)
 		} else if bloberror.HasCode(err, bloberror.BlobNotFound) {
