@@ -38,8 +38,8 @@ func main() {
     }
 
     // Create the adapter for Azure Blob Storage. Provide account (storage account name),
-    // container name, blob name and credentials. If the container does not exist,
-    // it will be created when loading/saving the policy.
+    // container name, blob name and credentials. If the container and blob does not exist,
+    // they will be created.
     a, err := blobadapter.NewAdapter("account", "container", "policy.csv", cred)
     if err != nil {
         // Handle error.
@@ -50,7 +50,10 @@ func main() {
         // Handle error.
     }
 
-    // Load the policy from the specified blob in Azure Blob Storage.
+    // Load the policy from the specified blob in Azure Blob Storage manually.
+    // NOTE: Like all implicit and explicit adapters the policies is loaded
+    // automatically when calling NewEnforcer. This method can be used at
+    // runtime to reload policy.
     if err := e.LoadPolicy(); err != nil {
         // Handle error.
     }

@@ -37,7 +37,7 @@ type Adapter struct {
 }
 
 // NewAdapter returns a new adapter with the given account, container, blob and credentials.
-// If the container and blob does not exist, then will be created.
+// If the container and blob does not exist, they will be created.
 func NewAdapter(account, container, blob string, cred azcore.TokenCredential, options ...Option) (*Adapter, error) {
 	if err := checkAccountCredentialsArguments(account, cred); err != nil {
 		return nil, err
@@ -56,6 +56,7 @@ func NewAdapter(account, container, blob string, cred azcore.TokenCredential, op
 }
 
 // NewAdapterFromConnectionString returns a new adapter with the given connection string, container and blob.
+// If the container and blob does not exist, they will be created.
 func NewAdapterFromConnectionString(connectionString, container, blob string, options ...Option) (*Adapter, error) {
 	if len(connectionString) == 0 {
 		return nil, ErrInvalidConnectionString
@@ -74,6 +75,7 @@ func NewAdapterFromConnectionString(connectionString, container, blob string, op
 }
 
 // NewAdapterFromSharedKeyCredential returns a new adapter with the given account, key, container and blob.
+// If the container and blob does not exist, they will be created.
 func NewAdapterFromSharedKeyCredential(account, key, container, blob string, options ...Option) (*Adapter, error) {
 	if err := checkAccountKeyArguments(account, key); err != nil {
 		return nil, err
