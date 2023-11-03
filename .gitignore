@@ -1,1 +1,6 @@
+cmd/
 testdata/
+
+main.go
+main
+main.exe
