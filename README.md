@@ -1,4 +1,6 @@
-# blobadapter
+# casbin-blob-adapter
+
+[![Go Reference](https://pkg.go.dev/badge/github.com/RedeployAB/casbin-blob-adapter.svg)](https://pkg.go.dev/github.com/RedeployAB/casbin-blob-adapter)
 
 > Azure Blob Storage adapter for casbin.
 
