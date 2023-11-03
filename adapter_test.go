@@ -9,9 +9,12 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/blob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/container"
+	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/service"
 	"github.com/casbin/casbin/v2"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -43,9 +46,14 @@ func TestNewAdapter(t *testing.T) {
 				container: "container",
 				blob:      "blob",
 				cred:      &mockCredential{},
+				options: []Option{
+					func(a *Adapter) {
+						a.c = &mockBlobClient{}
+					},
+				},
 			},
 			want: &Adapter{
-				c:         &azblob.Client{},
+				c:         &mockBlobClient{},
 				container: "container",
 				blob:      "blob",
 				timeout:   time.Second * 10,
@@ -66,14 +74,46 @@ func TestNewAdapter(t *testing.T) {
 				blob:      "blob",
 				cred:      &mockCredential{},
 				options: []Option{
+					func(a *Adapter) {
+						a.c = &mockBlobClient{}
+					},
 					WithTimeout(time.Second * 20),
 				},
 			},
 			want: &Adapter{
-				c:         &azblob.Client{},
+				c:         &mockBlobClient{},
 				container: "container",
 				blob:      "blob",
 				timeout:   time.Second * 20,
+			},
+		},
+		{
+			name: "Create a new adapter with a container and blob that already exist",
+			input: struct {
+				account   string
+				container string
+				blob      string
+				cred      azcore.TokenCredential
+				options   []Option
+			}{
+				account:   "account",
+				container: "container",
+				blob:      "blob",
+				cred:      &mockCredential{},
+				options: []Option{
+					func(a *Adapter) {
+						a.c = &mockBlobClient{
+							containerFound: true,
+							blobFound:      true,
+						}
+					},
+				},
+			},
+			want: &Adapter{
+				c:         &mockBlobClient{},
+				container: "container",
+				blob:      "blob",
+				timeout:   time.Second * 10,
 			},
 		},
 		{
@@ -89,6 +129,11 @@ func TestNewAdapter(t *testing.T) {
 				container: "container",
 				blob:      "blob",
 				cred:      &mockCredential{},
+				options: []Option{
+					func(a *Adapter) {
+						a.c = &mockBlobClient{}
+					},
+				},
 			},
 			want:    nil,
 			wantErr: ErrInvalidAccount,
@@ -106,6 +151,11 @@ func TestNewAdapter(t *testing.T) {
 				container: "container",
 				blob:      "blob",
 				cred:      nil,
+				options: []Option{
+					func(a *Adapter) {
+						a.c = &mockBlobClient{}
+					},
+				},
 			},
 			want:    nil,
 			wantErr: ErrInvalidCredential,
@@ -123,6 +173,11 @@ func TestNewAdapter(t *testing.T) {
 				container: "",
 				blob:      "blob",
 				cred:      &mockCredential{},
+				options: []Option{
+					func(a *Adapter) {
+						a.c = &mockBlobClient{}
+					},
+				},
 			},
 			want:    nil,
 			wantErr: ErrInvalidContainer,
@@ -140,6 +195,11 @@ func TestNewAdapter(t *testing.T) {
 				container: "container",
 				blob:      "",
 				cred:      &mockCredential{},
+				options: []Option{
+					func(a *Adapter) {
+						a.c = &mockBlobClient{}
+					},
+				},
 			},
 			want:    nil,
 			wantErr: ErrInvalidBlob,
@@ -150,7 +210,7 @@ func TestNewAdapter(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			got, gotErr := NewAdapter(test.input.account, test.input.container, test.input.blob, test.input.cred, test.input.options...)
 
-			if diff := cmp.Diff(test.want, got, cmp.AllowUnexported(Adapter{}), cmpopts.IgnoreUnexported(azblob.Client{})); diff != "" {
+			if diff := cmp.Diff(test.want, got, cmp.AllowUnexported(Adapter{}), cmpopts.IgnoreUnexported(mockBlobClient{})); diff != "" {
 				t.Errorf("NewAdapter() unexpected result (-want +got):\n%s\n", diff)
 			}
 
@@ -184,9 +244,14 @@ func TestNewAdapterFromConnectionString(t *testing.T) {
 				connectionString: "DefaultEndpointsProtocol=https;AccountName=<accountName>;AccountKey=PGFjY291bnRLZXk+;EndpointSuffix=core.windows.net",
 				container:        "container",
 				blob:             "blob",
+				options: []Option{
+					func(a *Adapter) {
+						a.c = &mockBlobClient{}
+					},
+				},
 			},
 			want: &Adapter{
-				c:         &azblob.Client{},
+				c:         &mockBlobClient{},
 				container: "container",
 				blob:      "blob",
 				timeout:   time.Second * 10,
@@ -206,10 +271,13 @@ func TestNewAdapterFromConnectionString(t *testing.T) {
 				blob:             "blob",
 				options: []Option{
 					WithTimeout(time.Second * 20),
+					func(a *Adapter) {
+						a.c = &mockBlobClient{}
+					},
 				},
 			},
 			want: &Adapter{
-				c:         &azblob.Client{},
+				c:         &mockBlobClient{},
 				container: "container",
 				blob:      "blob",
 				timeout:   time.Second * 20,
@@ -226,6 +294,11 @@ func TestNewAdapterFromConnectionString(t *testing.T) {
 				connectionString: "",
 				container:        "container",
 				blob:             "blob",
+				options: []Option{
+					func(a *Adapter) {
+						a.c = &mockBlobClient{}
+					},
+				},
 			},
 			want:    nil,
 			wantErr: ErrInvalidConnectionString,
@@ -236,7 +309,7 @@ func TestNewAdapterFromConnectionString(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			got, gotErr := NewAdapterFromConnectionString(test.input.connectionString, test.input.container, test.input.blob, test.input.options...)
 
-			if diff := cmp.Diff(test.want, got, cmp.AllowUnexported(Adapter{}), cmpopts.IgnoreUnexported(azblob.Client{})); diff != "" {
+			if diff := cmp.Diff(test.want, got, cmp.AllowUnexported(Adapter{}), cmpopts.IgnoreUnexported(mockBlobClient{})); diff != "" {
 				t.Errorf("NewAdapterFromConnectionString() unexpected result (-want +got):\n%s\n", diff)
 			}
 
@@ -273,9 +346,14 @@ func TestNewAdapterFromSharedKeyCredential(t *testing.T) {
 				key:       "PGFjY291bnRLZXk+",
 				container: "container",
 				blob:      "blob",
+				options: []Option{
+					func(a *Adapter) {
+						a.c = &mockBlobClient{}
+					},
+				},
 			},
 			want: &Adapter{
-				c:         &azblob.Client{},
+				c:         &mockBlobClient{},
 				container: "container",
 				blob:      "blob",
 				timeout:   time.Second * 10,
@@ -295,11 +373,14 @@ func TestNewAdapterFromSharedKeyCredential(t *testing.T) {
 				container: "container",
 				blob:      "blob",
 				options: []Option{
+					func(a *Adapter) {
+						a.c = &mockBlobClient{}
+					},
 					WithTimeout(time.Second * 20),
 				},
 			},
 			want: &Adapter{
-				c:         &azblob.Client{},
+				c:         &mockBlobClient{},
 				container: "container",
 				blob:      "blob",
 				timeout:   time.Second * 20,
@@ -318,6 +399,11 @@ func TestNewAdapterFromSharedKeyCredential(t *testing.T) {
 				key:       "PGFjY291bnRLZXk+",
 				container: "container",
 				blob:      "blob",
+				options: []Option{
+					func(a *Adapter) {
+						a.c = &mockBlobClient{}
+					},
+				},
 			},
 			want:    nil,
 			wantErr: ErrInvalidAccount,
@@ -335,6 +421,11 @@ func TestNewAdapterFromSharedKeyCredential(t *testing.T) {
 				key:       "",
 				container: "container",
 				blob:      "blob",
+				options: []Option{
+					func(a *Adapter) {
+						a.c = &mockBlobClient{}
+					},
+				},
 			},
 			want:    nil,
 			wantErr: ErrInvalidKey,
@@ -345,7 +436,7 @@ func TestNewAdapterFromSharedKeyCredential(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			got, gotErr := NewAdapterFromSharedKeyCredential(test.input.account, test.input.key, test.input.container, test.input.blob, test.input.options...)
 
-			if diff := cmp.Diff(test.want, got, cmp.AllowUnexported(Adapter{}), cmpopts.IgnoreUnexported(azblob.Client{})); diff != "" {
+			if diff := cmp.Diff(test.want, got, cmp.AllowUnexported(Adapter{}), cmpopts.IgnoreUnexported(mockBlobClient{})); diff != "" {
 				t.Errorf("NewAdapterFromSharedKeyCredential() unexpected result (-want +got):\n%s\n", diff)
 			}
 
@@ -377,7 +468,7 @@ func TestAdapter_LoadPolicy(t *testing.T) {
 			},
 		},
 		{
-			name: "Load policy with error (container does not exist) first call",
+			name: "Load policy with error (container does not exist)",
 			input: func() *Adapter {
 				return &Adapter{
 					c: &mockBlobClient{
@@ -387,29 +478,13 @@ func TestAdapter_LoadPolicy(t *testing.T) {
 					},
 					container: "container",
 					blob:      "blob",
-				}
-			},
-			want: nil,
-		},
-		{
-			name: "Load policy with error (container does not exist) second call",
-			input: func() *Adapter {
-				return &Adapter{
-					c: &mockBlobClient{
-						errDownload: &azcore.ResponseError{
-							ErrorCode: string(bloberror.ContainerNotFound),
-						},
-					},
-					container: "container",
-					blob:      "blob",
-					initiated: true,
 				}
 			},
 			want:    nil,
 			wantErr: ErrContainerDoesNotExist,
 		},
 		{
-			name: "Load policy with error (blob does not exist) first call",
+			name: "Load policy with error (blob does not exist)",
 			input: func() *Adapter {
 				return &Adapter{
 					c: &mockBlobClient{
@@ -419,22 +494,6 @@ func TestAdapter_LoadPolicy(t *testing.T) {
 					},
 					container: "container",
 					blob:      "blob",
-				}
-			},
-			want: nil,
-		},
-		{
-			name: "Load policy with error (blob does not exist) second call",
-			input: func() *Adapter {
-				return &Adapter{
-					c: &mockBlobClient{
-						errDownload: &azcore.ResponseError{
-							ErrorCode: string(bloberror.BlobNotFound),
-						},
-					},
-					container: "container",
-					blob:      "blob",
-					initiated: true,
 				}
 			},
 			want:    nil,
@@ -533,10 +592,58 @@ func TestWriteRule(t *testing.T) {
 }
 
 type mockBlobClient struct {
-	errCreate   error
-	errDownload error
-	errUpload   error
-	policies    []byte
+	errCreate      error
+	errDownload    error
+	errUpload      error
+	containerFound bool
+	blobFound      bool
+	policies       []byte
+}
+
+func (c mockBlobClient) NewListContainersPager(o *azblob.ListContainersOptions) *runtime.Pager[azblob.ListContainersResponse] {
+	containers := []*service.ContainerItem{}
+	if c.containerFound {
+		containers = append(containers, &service.ContainerItem{
+			Name: toPtr("container"),
+		})
+	}
+	pager := runtime.NewPager(runtime.PagingHandler[azblob.ListContainersResponse]{
+		More: func(page azblob.ListContainersResponse) bool {
+			return false
+		},
+		Fetcher: func(ctx context.Context, page *azblob.ListContainersResponse) (azblob.ListContainersResponse, error) {
+			return azblob.ListContainersResponse{
+				ListContainersSegmentResponse: azblob.ListContainersSegmentResponse{
+					ContainerItems: containers,
+				},
+			}, nil
+		},
+	})
+	return pager
+}
+
+func (c mockBlobClient) NewListBlobsFlatPager(containerName string, o *azblob.ListBlobsFlatOptions) *runtime.Pager[azblob.ListBlobsFlatResponse] {
+	blobs := []*container.BlobItem{}
+	if c.blobFound {
+		blobs = append(blobs, &container.BlobItem{
+			Name: toPtr("blob"),
+		})
+	}
+	pager := runtime.NewPager(runtime.PagingHandler[azblob.ListBlobsFlatResponse]{
+		More: func(page azblob.ListBlobsFlatResponse) bool {
+			return false
+		},
+		Fetcher: func(ctx context.Context, page *azblob.ListBlobsFlatResponse) (azblob.ListBlobsFlatResponse, error) {
+			return azblob.ListBlobsFlatResponse{
+				ListBlobsFlatSegmentResponse: azblob.ListBlobsFlatSegmentResponse{
+					Segment: &container.BlobFlatListSegment{
+						BlobItems: blobs,
+					},
+				},
+			}, nil
+		},
+	})
+	return pager
 }
 
 func (c mockBlobClient) CreateContainer(ctx context.Context, containerName string, o *azblob.CreateContainerOptions) (azblob.CreateContainerResponse, error) {

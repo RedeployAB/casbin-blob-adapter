@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob/bloberror"
 	"github.com/casbin/casbin/v2/model"
@@ -20,6 +21,8 @@ import (
 
 // client is the interface that wraps around methods CreateContainer, DownloadStream and UploadStream.
 type client interface {
+	NewListContainersPager(o *azblob.ListContainersOptions) *runtime.Pager[azblob.ListContainersResponse]
+	NewListBlobsFlatPager(containerName string, o *azblob.ListBlobsFlatOptions) *runtime.Pager[azblob.ListBlobsFlatResponse]
 	CreateContainer(ctx context.Context, containerName string, o *azblob.CreateContainerOptions) (azblob.CreateContainerResponse, error)
 	DownloadStream(ctx context.Context, containerName string, blobName string, o *azblob.DownloadStreamOptions) (azblob.DownloadStreamResponse, error)
 	UploadStream(ctx context.Context, containerName string, blobName string, body io.Reader, o *azblob.UploadStreamOptions) (azblob.UploadStreamResponse, error)
@@ -31,26 +34,24 @@ type Adapter struct {
 	container string
 	blob      string
 	timeout   time.Duration
-	initiated bool
 }
 
 // NewAdapter returns a new adapter with the given account, container, blob and credentials.
+// If the container and blob does not exist, then will be created.
 func NewAdapter(account, container, blob string, cred azcore.TokenCredential, options ...Option) (*Adapter, error) {
 	if err := checkAccountCredentialsArguments(account, cred); err != nil {
 		return nil, err
 	}
 
-	a, err := newAdapter(container, blob, options...)
+	clientFn := func() (client, error) {
+		return azblob.NewClient(serviceURL(account), cred, nil)
+	}
+
+	a, err := newAdapter(container, blob, clientFn, options...)
 	if err != nil {
 		return nil, err
 	}
 
-	if a.c == nil {
-		a.c, err = azblob.NewClient(serviceURL(account), cred, nil)
-		if err != nil {
-			return nil, err
-		}
-	}
 	return a, nil
 }
 
@@ -60,17 +61,15 @@ func NewAdapterFromConnectionString(connectionString, container, blob string, op
 		return nil, ErrInvalidConnectionString
 	}
 
-	a, err := newAdapter(container, blob, options...)
+	clientFn := func() (client, error) {
+		return azblob.NewClientFromConnectionString(connectionString, nil)
+	}
+
+	a, err := newAdapter(container, blob, clientFn, options...)
 	if err != nil {
 		return nil, err
 	}
 
-	if a.c == nil {
-		a.c, err = azblob.NewClientFromConnectionString(connectionString, nil)
-		if err != nil {
-			return nil, err
-		}
-	}
 	return a, nil
 }
 
@@ -80,26 +79,24 @@ func NewAdapterFromSharedKeyCredential(account, key, container, blob string, opt
 		return nil, err
 	}
 
-	a, err := newAdapter(container, blob, options...)
-	if err != nil {
-		return nil, err
-	}
-
-	if a.c == nil {
+	clientFn := func() (client, error) {
 		cred, err := azblob.NewSharedKeyCredential(account, key)
 		if err != nil {
 			return nil, err
 		}
-		a.c, err = azblob.NewClientWithSharedKeyCredential(serviceURL(account), cred, nil)
-		if err != nil {
-			return nil, err
-		}
+		return azblob.NewClientWithSharedKeyCredential(serviceURL(account), cred, nil)
 	}
+
+	a, err := newAdapter(container, blob, clientFn, options...)
+	if err != nil {
+		return nil, err
+	}
+
 	return a, nil
 }
 
 // newAdapter returns a new adapter with the given container, blob and options.
-func newAdapter(container, blob string, options ...Option) (*Adapter, error) {
+func newAdapter(container, blob string, clientFn func() (client, error), options ...Option) (*Adapter, error) {
 	if err := checkContainerBlobArguments(container, blob); err != nil {
 		return nil, err
 	}
@@ -113,6 +110,19 @@ func newAdapter(container, blob string, options ...Option) (*Adapter, error) {
 	for _, option := range options {
 		option(a)
 	}
+
+	if a.c == nil {
+		var err error
+		a.c, err = clientFn()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if err := a.initAdapter(); err != nil {
+		return nil, err
+	}
+
 	return a, nil
 }
 
@@ -141,16 +151,8 @@ func (a *Adapter) loadPolicyBlob(model model.Model, handler func(string, model.M
 		// to avoid an error at this point, return nil and set initiated to true.
 		// Next call to LoadPolicy will return the error.
 		if bloberror.HasCode(err, bloberror.ContainerNotFound) {
-			if !a.initiated {
-				a.initiated = true
-				return nil
-			}
 			return fmt.Errorf("%w: %s", ErrContainerDoesNotExist, a.container)
 		} else if bloberror.HasCode(err, bloberror.BlobNotFound) {
-			if !a.initiated {
-				a.initiated = true
-				return nil
-			}
 			return fmt.Errorf("%w: %s", ErrBlobDoesNotExist, a.blob)
 		} else {
 			return err
@@ -220,6 +222,79 @@ func (a *Adapter) RemovePolicy(sec, ptype string, rule []string) error {
 // NOTE: This method is not implemented.
 func (a *Adapter) RemoveFilteredPolicy(sec, ptype string, fieldIndex int, fieldValues ...string) error {
 	return errors.New("not implemented")
+}
+
+// initAdapter initializes the adapter by creating container and blob if they don't
+// exist.
+func (a *Adapter) initAdapter() error {
+	ctx, cancel := context.WithTimeout(context.Background(), a.timeout)
+	defer cancel()
+
+	if err := a.createContainerIfNotExist(ctx, a.container); err != nil {
+		return err
+	}
+	if err := a.createBlobIfNotExist(ctx, a.container, a.blob); err != nil {
+		return err
+	}
+	return nil
+}
+
+// createContainerIfNotExist creates a container if it does not exist.
+func (a *Adapter) createContainerIfNotExist(ctx context.Context, container string) error {
+	pager := a.c.NewListContainersPager(&azblob.ListContainersOptions{
+		Prefix: toPtr(container),
+	})
+
+	var found bool
+	for pager.More() && !found {
+		res, err := pager.NextPage(ctx)
+		if err != nil {
+			return err
+		}
+		for _, c := range res.ContainerItems {
+			if *c.Name == container {
+				found = true
+				break
+			}
+		}
+	}
+	if !found {
+		if _, err := a.c.CreateContainer(ctx, container, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// createBlobIfNotExist creates a blob if it does not exist.
+func (a *Adapter) createBlobIfNotExist(ctx context.Context, container, blob string) error {
+	pager := a.c.NewListBlobsFlatPager(container, &azblob.ListBlobsFlatOptions{
+		Prefix: toPtr(blob),
+	})
+	var found bool
+	for pager.More() && !found {
+		res, err := pager.NextPage(ctx)
+		if err != nil {
+			return err
+		}
+		for _, b := range res.Segment.BlobItems {
+			if *b.Name == blob {
+				found = true
+				break
+			}
+		}
+	}
+	if !found {
+		if _, err := a.c.UploadStream(ctx, container, blob, bytes.NewReader([]byte("")), nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// toPtr returns a pointer to the provided value.s
+func toPtr[T any](t T) *T {
+	return &t
 }
 
 // writeRule writes ptype and rule to the buffer.
